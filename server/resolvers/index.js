@@ -1,63 +1,75 @@
-const {prisma} = require("../db")
-const {sign} = require("jsonwebtoken")
-const {hash}= require("bcrypt")
+const { prisma } = require("../db");
+const { sign } = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 
-
-const Query ={
-    login: async(parent, args)=>{
-    const user =    await prisma.user.findUnique({where:{email:args.input.email}})
-    // console.log(user)
-    // console.log(args)
-    return {status : user.password===args.input.password}
-    }
-
-}
-
-const Mutation= {
-    createUser: async(parent, args) => {
-      const user = args.input;
-      const token = sign(
+const Query = {
+  helloworld: () => "helloworld",
+};
+const Mutation = {
+  login: async (parent, args) => {
+    const user = await prisma.user.findUnique({
+      where: { email: args.input.email },
+    });
+    if (!user) return { token: "" };
+    let token;
+    if (bcrypt.compare(args.input.password, user.password)) {
+      token = sign(
         {
-            user,
+          user,
         },
         process.env.JWT_SECRET,
         {
-            expiresIn: "2h",
+          expiresIn: "2h",
         }
-        
+      );
+    }
+    return { token };
+  },
+  createUser: async (parent, args) => {
+    const user = args.input;
+    const token = sign(
+      {
+        user,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "2h",
+      }
     );
-    console.log(user)
-     user.password= await hash(user.password, 10);
+    user.password = await bcrypt.hash(user.password, 10);
 
-     await prisma.user.create({data:user});
-    
+    await prisma.user.create({ data: user });
 
-      return user;
-    },
+    return { token };
+  },
 
-    // updateUsername: (parent, args) => {
-    //   const { id, newUsername } = args.input;
-    //   let userUpdated;
-    //   UserList.forEach((user) => {
-    //     if (user.id === Number(id)) {
-    //       user.username = newUsername;
-    //       userUpdated = user;
-    //     }
-    //   });
-
-    //   return userUpdated;
-    // },
-
-    // deleteUser: (parent, args) => {
-    //   const id = args.id;
-    //   _.remove(UserList, (user) => user.id === Number(id));
-    //   return null;
-    // },
-  }
-
-const resolvers ={
-    Query,Mutation
+  updateUser: async (parent, args) => {
+    const user = await prisma.user.findUnique({
+      where: { email: args.input.oldEmail },
+    });
+    user.username = args.input.username
+    user.email = args.input.email;
+    user.password = await bcrypt.hash(args.input.password, 10);
+    user.city = args.input.city;
+    user.gender = args.input.gender;
+    await prisma.user.update({
+      where: { email: args.input.oldEmail },
+      data: {
+        email: user.email,
+        username:user.username,
+        password: user.password,
+        city: user.city,
+        gender: user.gender,
+      },
+    });
+    return user;
+  },
 };
-module.exports={
-    resolvers,
+
+const resolvers = {
+  Query,
+  Mutation,
+};
+module.exports = {
+  resolvers,
 };
